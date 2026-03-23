@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSP Budgetcontrolling</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f5f2ec; --surface:#fdfaf5; --surface2:#ede9e0; --border:#d6cfc0;
+  --ink:#1a1610; --ink2:#4a4438; --muted:#8a7f70;
+  --accent:#c84b2f; --accent2:#2f6eb8; --ok:#2a7a4b; --warn:#b87a1a; --danger:#c84b2f;
+  --mono:'JetBrains Mono',monospace; --sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+.app{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:32px 24px;}
+
+/* HEADER */
+header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:36px;flex-wrap:wrap;gap:16px;}
+.logo h1{font-size:30px;font-weight:800;letter-spacing:-1.5px;line-height:1;}
+.logo h1 em{font-style:normal;color:var(--accent);border-bottom:3px solid var(--accent);}
+.logo p{font-size:12px;font-family:var(--mono);color:var(--muted);margin-top:6px;}
+.header-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+/* SAVE INDICATOR */
+.save-dot{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);color:var(--muted);padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;}
+.save-dot span{width:7px;height:7px;border-radius:50%;background:var(--ok);}
+.save-dot.saving span{background:var(--warn);animation:blink .6s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* BTNS */
+.btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:9px 16px;border-radius:4px;border:1.5px solid transparent;cursor:pointer;transition:all .15s;}
+.btn-accent{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-accent:hover{background:#a83a20;}
+.btn-outline{background:transparent;border-color:var(--border);color:var(--ink2);}
+.btn-outline:hover{border-color:var(--ink2);}
+.btn-green{background:var(--ok);color:#fff;border-color:var(--ok);}
+.btn-green:hover{background:#1f5e39;}
+.btn-excel{background:#1d6f42;color:#fff;border-color:#1d6f42;}
+.btn-excel:hover{background:#165433;}
+.btn-sm{padding:5px 10px;font-size:11px;}
+
+/* SUMMARY */
+.summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+@media(max-width:800px){.summary-strip{grid-template-columns:repeat(2,1fr);}}
+.strip-card{background:var(--surface);border:1.5px solid var(--border);border-radius:6px;padding:16px 18px;position:relative;overflow:hidden;}
+.strip-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.strip-card.s-total::before{background:var(--accent2);}
+.strip-card.s-used::before{background:var(--accent);}
+.strip-card.s-free::before{background:var(--ok);}
+.strip-card.s-count::before{background:var(--warn);}
+.strip-label{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;}
+.strip-value{font-size:20px;font-weight:800;letter-spacing:-.8px;line-height:1;}
+.strip-sub{font-size:10px;font-family:var(--mono);color:var(--muted);margin-top:4px;}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;}
+@media(max-width:980px){.layout{grid-template-columns:1fr;}}
+
+/* CARD */
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:20px;}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1.5px solid var(--border);background:var(--surface2);flex-wrap:wrap;gap:8px;}
+.card-title{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:500;}
+.card-action{font-size:12px;font-family:var(--mono);color:var(--accent2);cursor:pointer;background:none;border:none;font-weight:500;text-decoration:underline;text-underline-offset:3px;}
+
+/* PSP ITEMS */
+.psp-item{border-bottom:1px solid var(--border);}
+.psp-item:last-child{border-bottom:none;}
+.psp-summary{padding:16px 18px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;transition:background .12s;}
+.psp-summary:hover{background:#faf7f0;}
+.psp-item.expanded .psp-summary{background:#fef6f2;border-left:3px solid var(--accent);padding-left:15px;}
+.psp-meta{flex:1;min-width:0;}
+.psp-code{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:2px;}
+.psp-name{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.3px;}
+.psp-dl-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.dl-chip{font-size:10px;font-family:var(--mono);background:var(--surface2);border:1px solid var(--border);padding:2px 7px;border-radius:2px;color:var(--ink2);white-space:nowrap;}
+.psp-amounts{text-align:right;flex-shrink:0;}
+.psp-remaining{font-size:18px;font-weight:800;letter-spacing:-.8px;line-height:1;}
+.remaining-ok{color:var(--ok);} .remaining-warn{color:var(--warn);} .remaining-danger{color:var(--danger);}
+.psp-budget-line{font-size:11px;font-family:var(--mono);color:var(--muted);margin-top:2px;}
+
+.prog-wrap{padding:0 18px 14px;}
+.prog-track{height:6px;background:var(--surface2);border-radius:10px;overflow:hidden;margin-bottom:5px;border:1px solid var(--border);}
+.prog-fill{height:100%;border-radius:10px;transition:width .6s cubic-bezier(.4,0,.2,1);}
+.fill-ok{background:var(--ok);} .fill-warn{background:linear-gradient(90deg,var(--ok),var(--warn));} .fill-danger{background:linear-gradient(90deg,var(--warn),var(--danger));} .fill-over{background:var(--danger);width:100%!important;}
+.prog-labels{display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--muted);}
+.prog-labels .pct{color:var(--ink2);font-weight:500;}
+
+.psp-detail{border-top:1px solid var(--border);background:#faf8f4;display:none;}
+.psp-item.expanded .psp-detail{display:block;}
+.dl-table{width:100%;border-collapse:collapse;}
+.dl-table th{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-align:left;padding:8px 18px;border-bottom:1px solid var(--border);background:var(--surface2);}
+.dl-table td{padding:9px 18px;font-size:12px;border-bottom:1px solid rgba(214,207,192,.4);vertical-align:middle;}
+.dl-table tr:last-child td{border-bottom:none;}
+.dl-name{font-weight:600;color:var(--ink);}
+.dl-bar-wrap{display:inline-flex;align-items:center;gap:6px;}
+.dl-bar{width:70px;height:4px;background:var(--border);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;}
+.dl-bar-fill{height:100%;border-radius:4px;}
+.psp-detail-actions{padding:10px 18px;display:flex;gap:8px;border-top:1px solid var(--border);}
+
+.empty{padding:40px 24px;text-align:center;color:var(--muted);font-size:13px;font-family:var(--mono);}
+
+/* INVOICE TABLE */
+.inv-table{width:100%;border-collapse:collapse;}
+.inv-table th{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap;}
+.inv-table td{padding:11px 18px;font-size:13px;border-bottom:1px solid rgba(214,207,192,.5);vertical-align:middle;}
+.inv-table tr:last-child td{border-bottom:none;}
+.inv-table tr:hover td{background:#faf7f0;}
+.inv-name{font-weight:600;color:var(--ink);}
+.inv-sub{font-family:var(--mono);font-size:10px;color:var(--muted);}
+.inv-amount{font-family:var(--mono);font-weight:500;}
+.inv-date{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.badge{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:2px;font-weight:500;}
+.badge-abschl{background:#e8f0fb;color:var(--accent2);border:1px solid #c0d4f0;}
+.badge-schluss{background:#fde8e5;color:var(--danger);border:1px solid #f5c4bc;}
+.badge-teil{background:#fef3e2;color:var(--warn);border:1px solid #f5ddb0;}
+.badge-csv{background:#e8f5ee;color:var(--ok);border:1px solid #b0dcc0;}
+.del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;transition:all .12s;}
+.del-btn:hover{background:#fde8e5;color:var(--danger);}
+
+/* EXPORT CARD */
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 18px;}
+.export-option{border:1.5px solid var(--border);border-radius:6px;padding:14px 16px;cursor:pointer;transition:all .15s;background:var(--surface);text-align:left;}
+.export-option:hover{border-color:var(--accent2);background:#f0f4fc;}
+.export-option.excel:hover{border-color:#1d6f42;background:#f0faf4;}
+.export-icon{font-size:24px;display:block;margin-bottom:8px;}
+.export-title{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px;}
+.export-desc{font-size:11px;font-family:var(--mono);color:var(--muted);line-height:1.5;}
+
+/* TABS */
+.tabs{display:flex;border-bottom:1.5px solid var(--border);background:var(--surface2);overflow-x:auto;}
+.tab{padding:11px 16px;font-size:12px;font-family:var(--mono);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:all .15s;white-space:nowrap;flex-shrink:0;}
+.tab:hover{color:var(--ink2);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500;}
+.tab-content{display:none;padding:16px 18px 20px;}
+.tab-content.active{display:block;}
+
+/* UPLOAD */
+.upload-zone{border:2px dashed var(--border);border-radius:6px;padding:26px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--surface);}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:#fef6f2;}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:30px;margin-bottom:8px;display:block;}
+.upload-text{font-size:13px;color:var(--muted);line-height:1.7;}
+.upload-text strong{color:var(--accent);font-weight:700;}
+.upload-text small{font-family:var(--mono);font-size:10px;display:block;margin-top:3px;color:#bbb;}
+
+/* AI */
+.ai-status{display:none;align-items:center;gap:10px;padding:11px 14px;background:#e8f0fb;border:1px solid #c0d4f0;border-radius:4px;margin:10px 0;font-size:12px;font-family:var(--mono);color:var(--accent2);}
+.ai-status.visible{display:flex;}
+.spinner{width:13px;height:13px;border:2px solid #c0d4f0;border-top-color:var(--accent2);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.ai-result{display:none;padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:6px;margin-top:10px;}
+.ai-result.visible{display:block;}
+.ai-result-title{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;}
+.ai-field{margin-bottom:9px;}
+.ai-field label{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.8px;color:var(--muted);display:block;margin-bottom:3px;}
+.ai-field input,.ai-field select{width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:4px;padding:7px 10px;font-family:var(--sans);font-size:13px;color:var(--ink);outline:none;transition:border-color .15s;}
+.ai-field input:focus,.ai-field select:focus{border-color:var(--accent);}
+.ai-confirm-btns{display:flex;gap:8px;margin-top:12px;}
+
+/* CSV */
+.notice{padding:10px 14px;border-radius:4px;font-size:12px;font-family:var(--mono);margin:10px 0;}
+.notice-ok{background:#e8f5ee;color:var(--ok);border:1px solid #b0dcc0;}
+.notice-warn{background:#fef3e2;color:var(--warn);border:1px solid #f5ddb0;}
+.notice-err{background:#fde8e5;color:var(--danger);border:1px solid #f5c4bc;}
+.csv-rows{max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;margin-top:8px;}
+.csv-row{display:grid;grid-template-columns:2fr 1fr 1fr .6fr;gap:4px;padding:7px 10px;border-bottom:1px solid rgba(214,207,192,.4);font-size:11px;font-family:var(--mono);align-items:center;}
+.csv-row:last-child{border-bottom:none;}
+.csv-row.hdr{background:var(--surface2);color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.8px;}
+.csv-row.ok{background:#f0faf4;} .csv-row.warn{background:#fef9f0;} .csv-row.err{background:#fdf0ee;color:var(--muted);}
+.csv-match{color:var(--ok);} .csv-nomatch{color:var(--warn);} .csv-err-txt{color:var(--danger);}
+.csv-format-box{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:11px 13px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;margin-top:12px;}
+.csv-format-box strong{color:var(--accent2);}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(26,22,16,.6);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+.overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1.5px solid var(--border);border-radius:8px;width:90%;max-width:520px;padding:26px;transform:translateY(16px);transition:transform .2s;box-shadow:0 20px 60px rgba(0,0,0,.15);max-height:90vh;overflow-y:auto;}
+.overlay.open .modal{transform:translateY(0);}
+.modal h2{font-size:18px;font-weight:800;letter-spacing:-.5px;margin-bottom:3px;}
+.modal-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:18px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.form-row.full{grid-template-columns:1fr;}
+.fgroup label{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--muted);display:block;margin-bottom:3px;}
+.fgroup input,.fgroup select{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:4px;padding:8px 10px;font-family:var(--sans);font-size:13px;color:var(--ink);outline:none;transition:border-color .15s;}
+.fgroup input:focus,.fgroup select:focus{border-color:var(--accent);}
+.modal-btns{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+.dl-section{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;}
+.dl-section-title{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;}
+.dl-entry{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;}
+.dl-entry .fgroup{margin-bottom:0;}
+.dl-remove{background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);cursor:pointer;padding:8px 10px;font-size:14px;transition:all .12s;height:36px;}
+.dl-remove:hover{border-color:var(--danger);color:var(--danger);background:#fde8e5;}
+
+.tag-ai{display:inline-block;font-size:9px;font-family:var(--mono);background:#e8f0fb;color:var(--accent2);border:1px solid #c0d4f0;padding:1px 5px;border-radius:2px;vertical-align:middle;margin-left:4px;}
+.tag-csv{display:inline-block;font-size:9px;font-family:var(--mono);background:#e8f5ee;color:var(--ok);border:1px solid #b0dcc0;padding:1px 5px;border-radius:2px;vertical-align:middle;margin-left:4px;}
+
+/* OBLIGO */
+.badge-banf{background:#e8f0fb;color:var(--accent2);border:1px solid #c0d4f0;}
+.badge-best{background:#e8f5ee;color:var(--ok);border:1px solid #b0dcc0;}
+.obligo-psp-bar{margin-top:6px;padding:8px 18px 10px;background:#faf8f4;border-top:1px solid var(--border);font-size:11px;font-family:var(--mono);display:none;}
+.psp-item.expanded .obligo-psp-bar{display:block;}
+.obligo-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(214,207,192,0.3);}
+.obligo-row:last-child{border-bottom:none;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.fadeup{animation:fadeUp .3s ease both;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">
+      <h1>PSP <em>Budget</em>control</h1>
+      <p>Abschlagsrechnungen · Dienstleister · Freies Budget</p>
+    </div>
+    <div class="header-right">
+      <div class="save-dot" id="save-indicator"><span></span>Gespeichert</div>
+      <button class="btn btn-outline" onclick="openPSPModal()">+ PSP-Element</button>
+      <button class="btn btn-excel" onclick="showExportOptions()">⬇ Excel Export</button>
+      <button class="btn btn-accent" onclick="setTab('csv')">Wöchentlicher CSV-Import</button>
+    </div>
+  </header>
+
+  <div class="summary-strip" id="summary-strip"></div>
+
+  <div class="layout">
+    <div class="left-col">
+
+      <div class="card fadeup">
+        <div class="card-head">
+          <span class="card-title">PSP-Elemente &amp; Budgetstatus</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="confirmReset()" style="color:var(--muted)">Daten löschen</button>
+            <button class="card-action" onclick="openPSPModal()">+ Neu anlegen</button>
+          </div>
+        </div>
+        <div id="psp-list"></div>
+      </div>
+
+      <div class="card fadeup" style="animation-delay:.08s" id="obligo-card" style="display:none">
+        <div class="card-head">
+          <span class="card-title">Obligo-Übersicht · BANF &amp; Bestellungen</span>
+          <span id="obligo-date-badge" style="font-size:11px;font-family:var(--mono);color:var(--muted)"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="inv-table" id="obligo-table">
+            <thead><tr><th>PSP / Objekt</th><th>Typ</th><th>Bestellnr.</th><th>Bezeichnung</th><th>Datum</th><th>Betrag</th></tr></thead>
+            <tbody id="obligo-tbody"><tr><td colspan="6"><div class="empty">Noch kein Obligo-Import.</div></td></tr></tbody>
+          </table>
+        </div>
+        <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:20px;font-size:12px;font-family:var(--mono);">
+          <span>BANF: <strong id="obligo-banf-sum" style="color:var(--accent2)">–</strong></span>
+          <span>Bestellungen: <strong id="obligo-best-sum" style="color:var(--ok)">–</strong></span>
+          <span>Gesamt-Obligo: <strong id="obligo-total-sum" style="color:var(--ink)">–</strong></span>
+        </div>
+      </div>
+
+      <div class="card fadeup" style="animation-delay:.05s">
+        <div class="card-head">
+          <span class="card-title">Alle Rechnungen</span>
+          <span id="inv-count" style="font-size:11px;font-family:var(--mono);color:var(--muted)">0 Belege</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="inv-table">
+            <thead><tr><th>Dienstleister</th><th>PSP</th><th>Typ</th><th>Betrag</th><th>Datum</th><th>Quelle</th><th></th></tr></thead>
+            <tbody id="inv-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-col" id="upload-section">
+
+      <!-- UPLOAD CARD -->
+      <div class="card fadeup" style="animation-delay:.1s">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('pdf')">PDF-Rechnung<span class="tag-ai">KI</span></div>
+          <div class="tab" onclick="switchTab('csv')">CSV-Import</div>
+          <div class="tab" onclick="switchTab('obligo')">Obligo<span class="tag-csv">SAP</span></div>
+          <div class="tab" onclick="switchTab('manual')">Manuell</div>
+        </div>
+
+        <!-- PDF -->
+        <div class="tab-content active" id="tab-pdf">
+          <div class="upload-zone" id="drop-zone-pdf">
+            <input type="file" accept=".pdf,image/*" onchange="handlePDFUpload(event)"/>
+            <span class="upload-icon">🧾</span>
+            <div class="upload-text"><strong>PDF hier ablegen</strong><br>KI liest Betrag &amp; Dienstleister automatisch<small>PDF · JPG · PNG</small></div>
+          </div>
+          <div class="ai-status" id="ai-status"><div class="spinner"></div><span id="ai-status-text">Analysiere …</span></div>
+          <div class="ai-result" id="ai-result">
+            <div class="ai-result-title">✦ KI-Erkennung – bitte prüfen &amp; bestätigen</div>
+            <div class="ai-field"><label>Dienstleister (erkannt)</label><input type="text" id="r-dienstleister"/></div>
+            <div class="ai-field"><label>Betrag (€ brutto)</label><input type="number" id="r-betrag" step="0.01"/></div>
+            <div class="ai-field"><label>Rechnungstyp</label>
+              <select id="r-typ"><option value="abschl">Abschlagsrechnung</option><option value="teil">Teilrechnung</option><option value="schluss">Schlussrechnung</option></select>
+            </div>
+            <div class="ai-field"><label>PSP-Element</label><select id="r-psp" onchange="updateDLSlot('r-psp','r-dl-slot')"></select></div>
+            <div class="ai-field"><label>Dienstleister aus PSP</label><select id="r-dl-slot"></select></div>
+            <div class="ai-field"><label>Datum</label><input type="date" id="r-datum"/></div>
+            <div class="ai-field"><label>Rechnungsnummer</label><input type="text" id="r-rgnr"/></div>
+            <div class="ai-confirm-btns">
+              <button class="btn btn-outline" style="flex:1" onclick="resetPDFUpload()">Verwerfen</button>
+              <button class="btn btn-accent" style="flex:2" onclick="confirmInvoice()">✓ Buchen</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CSV -->
+        <div class="tab-content" id="tab-csv">
+          <p style="font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:14px;line-height:1.7">Lade jede Woche deine Rechnungsliste als CSV hoch. Das System ordnet Dienstleister und PSP automatisch zu.</p>
+          <div class="upload-zone" id="drop-zone-csv">
+            <input type="file" accept=".csv,.txt" onchange="handleCSVUpload(event)"/>
+            <span class="upload-icon">📋</span>
+            <div class="upload-text"><strong>CSV-Datei hier ablegen</strong><br>oder klicken zum Auswählen<small>Semikolon-getrennt · UTF-8</small></div>
+          </div>
+          <div id="csv-notice"></div>
+          <div id="csv-preview-box" style="display:none"></div>
+          <div id="csv-import-btn" style="display:none;margin-top:12px">
+            <button class="btn btn-green" style="width:100%" onclick="importCSVRows()">✓ Erkannte Zeilen importieren</button>
+          </div>
+          <div class="csv-format-box">
+            <strong>Erwartetes CSV-Format:</strong><br>
+            Dienstleister;PSP-Code;Betrag;Datum;Typ;Rechnungsnummer<br><br>
+            <strong>Beispiel:</strong><br>
+            Bauer &amp; Sohn GmbH;2025.01.A;105000;2025-03-14;abschl;RE-25-008<br>
+            ElektroTech AG;2025.01.B;22000;2025-03-10;abschl;ET-25-03<br><br>
+            <span style="color:var(--warn)">Typ: abschl · teil · schluss</span>
+          </div>
+        </div>
+
+        <!-- OBLIGO -->
+        <div class="tab-content" id="tab-obligo">
+          <p style="font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:14px;line-height:1.7">Lade wöchentlich deinen SAP-Obligo-Auszug hoch. BANF (offene Anforderungen) und BEST (Bestellungen mit Bestellnummer) werden automatisch erkannt und dem PSP zugeordnet.</p>
+          <div class="upload-zone" id="drop-zone-obligo">
+            <input type="file" accept=".csv,.txt" onchange="handleObligoUpload(event)"/>
+            <span class="upload-icon">📂</span>
+            <div class="upload-text"><strong>Obligo-CSV hier ablegen</strong><br>SAP-Export · Semikolon-getrennt<small>Format: Geschäftsjahr;Kostenart;Objekt;Nr Referenzbeleg;…</small></div>
+          </div>
+          <div id="obligo-notice"></div>
+          <div id="obligo-preview" style="display:none"></div>
+          <div id="obligo-import-btn" style="display:none;margin-top:12px">
+            <button class="btn btn-green" style="width:100%" onclick="importObligoRows()">✓ Obligo übernehmen</button>
+          </div>
+          <div class="csv-format-box" style="margin-top:12px">
+            <strong>Erkannte Typen:</strong><br>
+            <span style="color:var(--accent2)">BANF</span> = Bestellanforderung (noch offen, keine Bestellnr.)<br>
+            <span style="color:var(--ok)">BEST</span> = Bestellung (mit Bestellnummer z.B. 4500118066)<br><br>
+            <strong>Spalte „Objekt"</strong> wird als PSP-Code erkannt (z.B. 0485.I30000.100.25)
+          </div>
+        </div>
+
+        <!-- MANUAL -->
+        <div class="tab-content" id="tab-manual">
+          <div class="ai-field"><label>Dienstleister</label><input type="text" id="m-dl" placeholder="Freitext"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="ai-field"><label>Betrag (€ brutto)</label><input type="number" id="m-betrag" step="0.01"/></div>
+            <div class="ai-field"><label>Rechnungstyp</label>
+              <select id="m-typ"><option value="abschl">Abschlagsrechnung</option><option value="teil">Teilrechnung</option><option value="schluss">Schlussrechnung</option></select>
+            </div>
+          </div>
+          <div class="ai-field"><label>PSP-Element</label><select id="m-psp" onchange="updateDLSlot('m-psp','m-dl-slot')"></select></div>
+          <div class="ai-field"><label>Dienstleister aus PSP</label><select id="m-dl-slot"></select></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="ai-field"><label>Datum</label><input type="date" id="m-datum"/></div>
+            <div class="ai-field"><label>Rechnungsnummer</label><input type="text" id="m-rgnr"/></div>
+          </div>
+          <button class="btn btn-accent" style="width:100%;margin-top:8px" onclick="saveManual()">✓ Manuell buchen</button>
+        </div>
+      </div>
+
+      <!-- EXPORT CARD -->
+      <div class="card fadeup" style="animation-delay:.12s" id="export-card">
+        <div class="card-head"><span class="card-title">Excel Export</span></div>
+        <div class="export-grid">
+          <div class="export-option excel" onclick="exportBudgetübersicht()">
+            <span class="export-icon">📊</span>
+            <div class="export-title">Budgetübersicht</div>
+            <div class="export-desc">PSP-Elemente mit Soll, Ist und freiem Budget pro Dienstleister</div>
+          </div>
+          <div class="export-option excel" onclick="exportRechnungen()">
+            <span class="export-icon">🧾</span>
+            <div class="export-title">Rechnungsliste</div>
+            <div class="export-desc">Alle gebuchten Rechnungen mit PSP, Betrag, Datum und Typ</div>
+          </div>
+          <div class="export-option excel" onclick="exportKomplett()">
+            <span class="export-icon">📁</span>
+            <div class="export-title">Komplett-Export</div>
+            <div class="export-desc">Alle Daten in einer Excel-Datei mit mehreren Tabellenblättern</div>
+          </div>
+          <div class="export-option excel" onclick="exportWochenbericht()">
+            <span class="export-icon">📅</span>
+            <div class="export-title">Wochenbericht</div>
+            <div class="export-desc">Nur Rechnungen der aktuellen Woche als kompakter Bericht</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WEEK STATS -->
+      <div class="card fadeup" style="animation-delay:.15s">
+        <div class="card-head"><span class="card-title">Diese Woche</span></div>
+        <div style="padding:14px 18px" id="week-stats"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PSP MODAL -->
+<div class="overlay" id="psp-modal">
+  <div class="modal">
+    <h2 id="psp-modal-title">PSP-Element anlegen</h2>
+    <div class="modal-sub">Budget und beauftragte Dienstleister definieren</div>
+    <div class="form-row">
+      <div class="fgroup"><label>PSP-Code</label><input type="text" id="p-code" placeholder="z.B. 2025.01.A"/></div>
+      <div class="fgroup"><label>Projekt</label><input type="text" id="p-proj" placeholder="z.B. Schulbau Mitte"/></div>
+    </div>
+    <div class="form-row full">
+      <div class="fgroup"><label>Bezeichnung / Leistung</label><input type="text" id="p-name" placeholder="z.B. Rohbauarbeiten"/></div>
+    </div>
+    <div class="form-row full">
+      <div class="fgroup"><label>Gesamt-Budget (€ netto)</label><input type="number" id="p-budget" placeholder="500000"/></div>
+    </div>
+    <div class="dl-section">
+      <div class="dl-section-title">
+        Beauftragte Dienstleister
+        <button class="btn btn-outline btn-sm" onclick="addDLEntry()" style="margin-left:8px;vertical-align:middle">+ Hinzufügen</button>
+      </div>
+      <div id="dl-entries"></div>
+      <p style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:6px">Budget-Anteil leer = kein Einzellimit</p>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeOverlay('psp-modal')">Abbrechen</button>
+      <button class="btn btn-accent" onclick="savePSP()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+const SK_PSPS   = 'psp_ctrl_psps';
+const SK_INV    = 'psp_ctrl_invoices';
+const SK_OBLIGO = 'psp_ctrl_obligo';
+
+function loadState() {
+  try {
+    const sp = localStorage.getItem(SK_PSPS);
+    const si = localStorage.getItem(SK_INV);
+    const so = localStorage.getItem(SK_OBLIGO);
+    if (sp) psps     = JSON.parse(sp);
+    if (si) invoices = JSON.parse(si);
+    if (so) obligoRows = JSON.parse(so);
+  } catch(e) { console.warn('Storage read failed', e); }
+}
+
+let saveTimer = null;
+function saveState() {
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.classList.add('saving'); ind.innerHTML='<span></span>Speichere …'; }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(SK_PSPS, JSON.stringify(psps));
+      localStorage.setItem(SK_INV,  JSON.stringify(invoices));
+      localStorage.setItem(SK_OBLIGO, JSON.stringify(obligoRows));
+    } catch(e) { console.warn('Storage write failed', e); }
+    if (ind) { ind.classList.remove('saving'); ind.innerHTML='<span></span>Gespeichert'; }
+  }, 400);
+}
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let psps = [
+  { id:'psp1', code:'2025.01.A', projekt:'Schulbau Mitte', name:'Rohbauarbeiten', budget:420000,
+    dienstleister:[{name:'Bauer & Sohn GmbH',budgetAnteil:280000},{name:'Abbruch Nord GmbH',budgetAnteil:140000}] },
+  { id:'psp2', code:'2025.01.B', projekt:'Schulbau Mitte', name:'Elektroinstallation', budget:85000,
+    dienstleister:[{name:'ElektroTech AG',budgetAnteil:null}] },
+  { id:'psp3', code:'2025.02.A', projekt:'Brücke B47', name:'Stahlbau', budget:310000,
+    dienstleister:[{name:'Stahlwerk Nord GmbH',budgetAnteil:200000},{name:'Schweißtechnik Meyer',budgetAnteil:110000}] },
+];
+let invoices = [
+  {id:'i1',pspId:'psp1',dienstleister:'Bauer & Sohn GmbH',betrag:105000,typ:'abschl',datum:'2025-03-01',rgnr:'RE-25-001',src:'manuell'},
+  {id:'i2',pspId:'psp1',dienstleister:'Bauer & Sohn GmbH',betrag:98000, typ:'abschl',datum:'2025-03-14',rgnr:'RE-25-008',src:'manuell'},
+  {id:'i3',pspId:'psp2',dienstleister:'ElektroTech AG',   betrag:22000, typ:'abschl',datum:'2025-03-10',rgnr:'ET-2025-03',src:'manuell'},
+  {id:'i4',pspId:'psp1',dienstleister:'Abbruch Nord GmbH',betrag:55000, typ:'abschl',datum:'2025-03-05',rgnr:'AN-2025-02',src:'manuell'},
+];
+let csvPending  = [];
+let dlEntries   = [];
+let obligoRows  = [];   // persisted obligo data
+let obligoPending = []; // rows parsed but not yet confirmed
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const fmt      = n => new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
+const fmtNum   = n => Math.round(n); // raw number for Excel
+const today    = () => new Date().toISOString().slice(0,10);
+const typLabel = t => ({abschl:'Abschlagsrechnung',teil:'Teilrechnung',schluss:'Schlussrechnung'})[t]||t;
+const typBadge = t => ({abschl:'badge-abschl',teil:'badge-teil',schluss:'badge-schluss'})[t]||'';
+const getUsed  = (pspId,dl=null) => invoices.filter(i=>i.pspId===pspId&&(dl===null||i.dienstleister===dl)).reduce((s,i)=>s+i.betrag,0);
+const kwOf     = d => { const dt=new Date(d); dt.setUTCDate(dt.getUTCDate()+4-(dt.getUTCDay()||7)); const ys=new Date(Date.UTC(dt.getUTCFullYear(),0,1)); return Math.ceil((((dt-ys)/86400000)+1)/7); };
+
+// ─── RENDER SUMMARY ──────────────────────────────────────────────────────────
+function renderSummary() {
+  const tot=psps.reduce((s,p)=>s+p.budget,0);
+  const used=psps.reduce((s,p)=>s+getUsed(p.id),0);
+  const free=tot-used;
+  const pct=tot>0?Math.round(used/tot*100):0;
+  const dlCnt=[...new Set(invoices.map(i=>i.dienstleister))].length;
+  document.getElementById('summary-strip').innerHTML=`
+    <div class="strip-card s-total"><div class="strip-label">Gesamt-Budget</div><div class="strip-value">${fmt(tot)}</div><div class="strip-sub">${psps.length} PSP-Elemente</div></div>
+    <div class="strip-card s-used"><div class="strip-label">Verbraucht</div><div class="strip-value">${fmt(used)}</div><div class="strip-sub">${pct}% ausgeschöpft</div></div>
+    <div class="strip-card s-free"><div class="strip-label">Frei verfügbar</div><div class="strip-value" style="color:${free<0?'var(--danger)':'var(--ok)'}">${fmt(free)}</div><div class="strip-sub">${invoices.length} Belege</div></div>
+    <div class="strip-card s-count"><div class="strip-label">Dienstleister</div><div class="strip-value">${dlCnt}</div><div class="strip-sub">mit Rechnungen</div></div>`;
+}
+
+// ─── RENDER PSP LIST ─────────────────────────────────────────────────────────
+function renderPSPs() {
+  const el=document.getElementById('psp-list');
+  if(!psps.length){el.innerHTML=`<div class="empty">Noch keine PSP-Elemente.<br>Klicke auf "+ PSP-Element".</div>`;return;}
+  el.innerHTML=psps.map((p,i)=>{
+    const used=getUsed(p.id),free=p.budget-used;
+    const pct=p.budget>0?Math.min(used/p.budget*100,100):0;
+    const over=free<0,warn=!over&&pct>70;
+    const fillCls=over?'fill-over':warn?'fill-warn':'fill-ok';
+    const remCls=over?'remaining-danger':warn?'remaining-warn':'remaining-ok';
+    const chips=p.dienstleister.map(d=>`<span class="dl-chip">${d.name}</span>`).join('');
+    const dlRows=p.dienstleister.map(d=>{
+      const du=getUsed(p.id,d.name),df=d.budgetAnteil!=null?d.budgetAnteil-du:null;
+      const dp=d.budgetAnteil?Math.min(du/d.budgetAnteil*100,100):null;
+      const bc=df!==null&&df<0?'var(--danger)':dp>70?'var(--warn)':'var(--ok)';
+      return `<tr>
+        <td><span class="dl-name">${d.name}</span></td>
+        <td style="font-family:var(--mono);font-size:11px">${d.budgetAnteil!=null?fmt(d.budgetAnteil):'–'}</td>
+        <td style="font-family:var(--mono);font-size:11px">${fmt(du)}</td>
+        <td><span class="dl-bar-wrap">
+          ${dp!==null?`<span class="dl-bar"><span class="dl-bar-fill" style="width:${dp}%;background:${bc}"></span></span>`:''}
+          <span style="font-family:var(--mono);font-size:11px;color:${df===null?'var(--muted)':df<0?'var(--danger)':'var(--ok)'}">
+            ${df!==null?fmt(df):'–'}
+          </span>
+        </span></td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="psp-item fadeup" style="animation-delay:${i*.04}s" id="pi-${p.id}">
+      <div class="psp-summary" onclick="togglePSP('${p.id}')">
+        <div class="psp-meta">
+          <div class="psp-code">${p.code} · ${p.projekt}</div>
+          <div class="psp-name">${p.name}</div>
+          <div class="psp-dl-chips">${chips}</div>
+        </div>
+        <div class="psp-amounts">
+          <div class="psp-remaining ${remCls}">${fmt(free)}</div>
+          <div class="psp-budget-line">von ${fmt(p.budget)}</div>
+        </div>
+      </div>
+      <div class="prog-wrap">
+        <div class="prog-track"><div class="prog-fill ${fillCls}" style="width:${pct}%"></div></div>
+        <div class="prog-labels"><span>${fmt(used)} verbraucht</span><span class="pct">${Math.round(pct)}%</span></div>
+      </div>
+      <div class="psp-detail">
+        <table class="dl-table">
+          <thead><tr><th>Dienstleister</th><th>Budget-Anteil</th><th>Verbraucht</th><th>Verbleibend</th></tr></thead>
+          <tbody>${dlRows}</tbody>
+        </table>
+        <div class="psp-detail-actions">
+          <button class="btn btn-outline btn-sm" onclick="editPSP('${p.id}')">✏ Bearbeiten</button>
+          <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="deletePSP('${p.id}')">✕ Löschen</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePSP(id){document.getElementById('pi-'+id).classList.toggle('expanded');}
+
+// ─── RENDER INVOICES ─────────────────────────────────────────────────────────
+function renderInvoices(){
+  const tb=document.getElementById('inv-tbody');
+  document.getElementById('inv-count').textContent=invoices.length+' Belege';
+  if(!invoices.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">Noch keine Rechnungen.</div></td></tr>`;return;}
+  const sorted=[...invoices].sort((a,b)=>b.datum.localeCompare(a.datum));
+  tb.innerHTML=sorted.map(inv=>{
+    const psp=psps.find(p=>p.id===inv.pspId);
+    const d=inv.datum?new Date(inv.datum).toLocaleDateString('de-DE'):'–';
+    const src=inv.src==='csv'?`<span class="badge badge-csv">CSV</span>`:`<span style="font-size:10px;color:var(--muted);font-family:var(--mono)">${inv.src||'–'}</span>`;
+    return `<tr>
+      <td><div class="inv-name">${inv.dienstleister}</div><div class="inv-sub">${inv.rgnr||'–'}</div></td>
+      <td><span class="inv-sub">${psp?psp.code:'–'}</span>${psp?`<div style="font-size:11px;color:var(--ink2)">${psp.name}</div>`:''}</td>
+      <td><span class="badge ${typBadge(inv.typ)}">${typLabel(inv.typ)}</span></td>
+      <td class="inv-amount">${fmt(inv.betrag)}</td>
+      <td class="inv-date">${d}</td>
+      <td>${src}</td>
+      <td><button class="del-btn" onclick="deleteInvoice('${inv.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── WEEK STATS ───────────────────────────────────────────────────────────────
+function renderWeekStats(){
+  const now=new Date(),ws=new Date(now);
+  ws.setDate(now.getDate()-now.getDay()+1);ws.setHours(0,0,0,0);
+  const tw=invoices.filter(i=>i.datum&&new Date(i.datum)>=ws);
+  const tot=tw.reduce((s,i)=>s+i.betrag,0);
+  const el=document.getElementById('week-stats');
+  if(!tw.length){el.innerHTML=`<p style="font-size:12px;color:var(--muted);font-family:var(--mono)">Keine Buchungen diese Woche.</p>`;return;}
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="font-size:12px;font-family:var(--mono);color:var(--muted)">${tw.length} Rechnung${tw.length>1?'en':''}</span>
+    <span style="font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent)">${fmt(tot)}</span>
+  </div>
+  ${tw.map(i=>`<div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--ink2)">${i.dienstleister}</span><span style="font-weight:500">${fmt(i.betrag)}</span></div>`).join('')}`;
+}
+
+function renderAll(){renderSummary();renderPSPs();renderInvoices();renderWeekStats();renderObligo();updateAllSelects();}
+
+// ─── SELECTS ─────────────────────────────────────────────────────────────────
+function updateAllSelects(){
+  const opts=psps.map(p=>`<option value="${p.id}">${p.code} · ${p.name}</option>`).join('');
+  ['r-psp','m-psp'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=opts||'<option value="">–</option>';});
+  updateDLSlot('r-psp','r-dl-slot');
+  updateDLSlot('m-psp','m-dl-slot');
+}
+function updateDLSlot(pspSelId,dlSelId){
+  const pEl=document.getElementById(pspSelId),dEl=document.getElementById(dlSelId);
+  if(!pEl||!dEl)return;
+  const psp=psps.find(p=>p.id===pEl.value);
+  if(!psp){dEl.innerHTML='<option value="">–</option>';return;}
+  dEl.innerHTML=psp.dienstleister.map(d=>`<option value="${d.name}">${d.name}</option>`).join('');
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(name){
+  const names=['pdf','csv','obligo','manual'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+function setTab(name){switchTab(name);document.getElementById('upload-section').scrollIntoView({behavior:'smooth'});}
+function showExportOptions(){document.getElementById('export-card').scrollIntoView({behavior:'smooth'});}
+
+// ─── PDF / AI ─────────────────────────────────────────────────────────────────
+async function handlePDFUpload(e){const f=e.target.files[0];if(f)await processFile(f);}
+async function processFile(file){
+  document.getElementById('ai-status').classList.add('visible');
+  document.getElementById('ai-status-text').textContent='KI liest Rechnung aus …';
+  document.getElementById('ai-result').classList.remove('visible');
+  const base64=await toBase64(file);
+  const mt=file.type.startsWith('image/')?file.type:'application/pdf';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
+        system:`Extrahiere aus der Rechnung diese Felder. Antworte NUR mit validem JSON, kein Markdown:
+{"dienstleister":"Firmenname","betrag_brutto":12345.67,"rechnungsnummer":"RE-...","datum":"YYYY-MM-DD","typ":"abschl|teil|schluss"}
+Wenn ein Feld fehlt, setze null. typ: abschl=Abschlagsrechnung, schluss=Schlussrechnung, teil=Teilrechnung.`,
+        messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:mt,data:base64.split(',')[1]}},{type:'text',text:'Extrahiere Rechnungsdaten.'}]}]
+      })
+    });
+    const data=await res.json();
+    const text=data.content?.map(c=>c.text||'').join('')||'';
+    let parsed={};try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}catch(e){}
+    document.getElementById('ai-status').classList.remove('visible');
+    document.getElementById('ai-result').classList.add('visible');
+    document.getElementById('r-dienstleister').value=parsed.dienstleister||'';
+    document.getElementById('r-betrag').value=parsed.betrag_brutto||'';
+    document.getElementById('r-rgnr').value=parsed.rechnungsnummer||'';
+    document.getElementById('r-datum').value=parsed.datum||today();
+    if(parsed.typ)document.getElementById('r-typ').value=parsed.typ;
+    if(parsed.dienstleister){
+      const dl=parsed.dienstleister.toLowerCase();
+      const mp=psps.find(p=>p.dienstleister.some(d=>d.name.toLowerCase().includes(dl.slice(0,5))||dl.includes(d.name.toLowerCase().slice(0,5))));
+      if(mp){
+        document.getElementById('r-psp').value=mp.id;
+        updateDLSlot('r-psp','r-dl-slot');
+        const md=mp.dienstleister.find(d=>d.name.toLowerCase().includes(dl.slice(0,5))||dl.includes(d.name.toLowerCase().slice(0,5)));
+        if(md)document.getElementById('r-dl-slot').value=md.name;
+      }
+    }
+  }catch(err){document.getElementById('ai-status').classList.remove('visible');document.getElementById('ai-result').classList.add('visible');document.getElementById('r-datum').value=today();}
+}
+const toBase64=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('fail'));r.readAsDataURL(file);});
+
+function confirmInvoice(){
+  const dl=document.getElementById('r-dienstleister').value.trim();
+  const betrag=parseFloat(document.getElementById('r-betrag').value);
+  const pspId=document.getElementById('r-psp').value;
+  const dlSlot=document.getElementById('r-dl-slot').value||dl;
+  const typ=document.getElementById('r-typ').value;
+  const datum=document.getElementById('r-datum').value;
+  const rgnr=document.getElementById('r-rgnr').value.trim();
+  if(!dl||!betrag||!pspId){alert('Bitte Dienstleister, Betrag und PSP angeben.');return;}
+  invoices.push({id:'i'+Date.now(),pspId,dienstleister:dlSlot||dl,betrag,typ,datum,rgnr,src:'pdf'});
+  resetPDFUpload();saveState();renderAll();
+}
+function resetPDFUpload(){
+  document.getElementById('ai-result').classList.remove('visible');
+  document.getElementById('ai-status').classList.remove('visible');
+  ['r-dienstleister','r-betrag','r-rgnr','r-datum'].forEach(id=>document.getElementById(id).value='');
+}
+
+// ─── CSV IMPORT ───────────────────────────────────────────────────────────────
+function handleCSVUpload(e){const f=e.target.files[0];if(f)readCSV(f);}
+function readCSV(file){const r=new FileReader();r.onload=ev=>parseCSV(ev.target.result);r.readAsText(file,'UTF-8');}
+
+function matchPSP(code) {
+  if (!code) return null;
+  const c = code.trim().toLowerCase();
+  // exact match first
+  let p = psps.find(p => p.code.toLowerCase() === c);
+  if (p) return p;
+  // partial match: PSP code contained in field or vice versa
+  p = psps.find(p => c.includes(p.code.toLowerCase()) || p.code.toLowerCase().includes(c));
+  return p || null;
+}
+
+function isSAPFormat(firstLine) {
+  const l = firstLine.toLowerCase();
+  return l.includes('geschäftsjahr') || l.includes('kostenart') || l.includes('referenzbeleg') || l.includes('belegdatum');
+}
+
+function parseCSV(text) {
+  const raw = text.replace(/^\uFEFF/, '').trim();
+  const lines = raw.split('\n').filter(l => l.trim());
+  if (!lines.length) return;
+
+  const firstLine = lines[0];
+  const sapFormat = isSAPFormat(firstLine);
+
+  if (sapFormat) {
+    // ── SAP Obligo format ────────────────────────────────────────────────────
+    // Columns: Geschäftsjahr | Kostenart | Objekt(PSP) | Nr Referenzbeleg | Bezeichnung | Belegdatum | Wert
+    const rows = [];
+    let startIdx = firstLine.toLowerCase().includes('geschäftsjahr') ? 1 : 0;
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      if (cols.length < 7) continue;
+      const [jahr, kostenart, objekt, refNr, bezeichnung, datum, wertRaw] = cols;
+
+      // skip summary/subtotal lines
+      if (jahr.toLowerCase().includes('typ') || jahr.toLowerCase().includes('banf') || jahr.toLowerCase().includes('best')) continue;
+      if (!objekt && !refNr) continue;
+      if (isNaN(parseInt(jahr)) || !refNr || !refNr.trim()) continue;
+
+      const wert = parseFloat(wertRaw?.replace(',', '.').replace(/[^\d.]/g, '')) || 0;
+      const isBEST = /^45\d{8,}$/.test(refNr.trim());
+      const typ = isBEST ? 'BEST' : 'BANF';
+      const psp = matchPSP(objekt);
+
+      rows.push({
+        dlName: bezeichnung || '–',
+        resolvedDL: bezeichnung || '–',
+        pspCode: objekt,
+        psp,
+        betrag: wert,
+        datum: datum || today(),
+        typ: isBEST ? 'abschl' : 'abschl',
+        rgnr: refNr.trim(),
+        bestellnr: isBEST ? refNr.trim() : '',
+        obligo_typ: typ,
+        status: !wert ? 'err' : !psp ? 'warn' : 'ok'
+      });
+    }
+
+    csvPending = rows.filter(r => r.status !== 'err');
+    renderCSVPreview(rows, true);
+
+  } else {
+    // ── Standard Rechnungs-CSV format ────────────────────────────────────────
+    // Columns: Dienstleister | PSP-Code | Betrag | Datum | Typ | Rechnungsnummer
+    let si = 0;
+    if (firstLine.toLowerCase().includes('dienstleister') || firstLine.toLowerCase().includes('psp')) si = 1;
+    const rows = [];
+    for (let i = si; i < lines.length; i++) {
+      const cols = lines[i].split(/[;,\t]/).map(c => c.trim().replace(/^"|"$/g, ''));
+      if (cols.length < 2) continue;
+      const dlName = cols[0], pspCode = cols[1];
+      const betrag = parseFloat(cols[2]?.replace(',', '.').replace(/[^\d.]/g, '') || '0');
+      const datum = cols[3] || today(), typ = cols[4] || 'abschl', rgnr = cols[5] || '';
+      const psp = matchPSP(pspCode);
+      const dlMatch = psp ? psp.dienstleister.find(d =>
+        d.name.toLowerCase().includes(dlName.toLowerCase().slice(0, 5)) ||
+        dlName.toLowerCase().includes(d.name.toLowerCase().slice(0, 5))
+      ) : null;
+      const resolvedDL = dlMatch ? dlMatch.name : dlName;
+      const status = !betrag ? 'err' : !psp ? 'warn' : 'ok';
+      rows.push({ dlName, resolvedDL, pspCode, psp, betrag, datum, typ, rgnr, bestellnr: '', obligo_typ: null, status });
+    }
+    csvPending = rows.filter(r => r.status !== 'err');
+    renderCSVPreview(rows, false);
+  }
+}
+
+function renderCSVPreview(rows, isSAP) {
+  const ok = rows.filter(r => r.status === 'ok').length;
+  const wn = rows.filter(r => r.status === 'warn').length;
+  const er = rows.filter(r => r.status === 'err').length;
+  const nEl = document.getElementById('csv-notice');
+
+  if (!rows.length) { nEl.innerHTML = `<div class="notice notice-err">Keine gültigen Zeilen gefunden.</div>`; return; }
+
+  const formatHint = isSAP
+    ? `<span style="color:var(--accent2)">SAP-Obligo-Format erkannt</span> · PSP aus Spalte „Objekt"`
+    : `Standard-Rechnungsformat erkannt`;
+
+  nEl.innerHTML = `<div class="notice ${ok > 0 ? 'notice-ok' : wn > 0 ? 'notice-warn' : 'notice-err'}">
+    ${formatHint}<br>
+    ${ok} Zeile${ok !== 1 ? 'n' : ''} mit PSP zugeordnet ✓ &nbsp;·&nbsp;
+    ${wn} PSP-Element nicht gefunden &nbsp;·&nbsp;
+    ${er} Fehler
+    ${wn > 0 ? `<br><span style="color:var(--warn)">⚠ Nicht zugeordnete Zeilen: PSP-Element im Tool anlegen, dann erneut importieren</span>` : ''}
+  </div>`;
+
+  const pb = document.getElementById('csv-preview-box');
+  pb.style.display = 'block';
+  pb.innerHTML = `
+    <div style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">
+      Vorschau (${rows.length} Zeilen)
+    </div>
+    <div class="csv-rows">
+      <div class="csv-row hdr">
+        <span>${isSAP ? 'Bezeichnung' : 'Dienstleister'}</span>
+        <span>PSP</span>
+        <span>${isSAP ? 'Typ / Bestellnr.' : 'Betrag'}</span>
+        <span>Status</span>
+      </div>
+      ${rows.map(r => `<div class="csv-row ${r.status}">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.resolvedDL}</span>
+        <span style="color:${r.psp ? 'var(--ok)' : 'var(--warn)'}">
+          ${r.psp ? r.psp.code : `<span title="PSP '${r.pspCode}' nicht gefunden">${r.pspCode} ⚠</span>`}
+        </span>
+        <span style="font-family:var(--mono);font-size:10px">
+          ${isSAP
+            ? `<span class="badge ${r.obligo_typ === 'BEST' ? 'badge-best' : 'badge-banf'}">${r.obligo_typ}</span>${r.bestellnr ? ' ' + r.bestellnr : ''}`
+            : (r.betrag ? fmt(r.betrag) : '!')}
+        </span>
+        <span class="${r.status === 'ok' ? 'csv-match' : r.status === 'warn' ? 'csv-nomatch' : 'csv-err-txt'}">
+          ${r.status === 'ok' ? '✓' : r.status === 'warn' ? '⚠' : '✕'}
+        </span>
+      </div>`).join('')}
+    </div>`;
+
+  document.getElementById('csv-import-btn').style.display = csvPending.length ? 'block' : 'none';
+}
+function importCSVRows(){
+  let n=0;
+  csvPending.forEach(r=>{
+    if(!r.psp||!r.betrag)return;
+    invoices.push({
+      id:'i'+Date.now()+Math.random(),
+      pspId:r.psp.id,
+      dienstleister:r.resolvedDL,
+      betrag:r.betrag,
+      typ:r.typ||'abschl',
+      datum:r.datum,
+      rgnr:r.bestellnr||r.rgnr,   // use Bestellnr if available
+      src:'csv'
+    });
+    n++;
+  });
+  document.getElementById('csv-notice').innerHTML=`<div class="notice notice-ok">✓ ${n} Zeile${n!==1?'n':''} importiert und PSP zugeordnet.</div>`;
+  document.getElementById('csv-preview-box').style.display='none';
+  document.getElementById('csv-import-btn').style.display='none';
+  csvPending=[];saveState();renderAll();
+}
+
+// ─── MANUAL ───────────────────────────────────────────────────────────────────
+function saveManual(){
+  const dl=document.getElementById('m-dl').value.trim();
+  const betrag=parseFloat(document.getElementById('m-betrag').value);
+  const typ=document.getElementById('m-typ').value;
+  const pspId=document.getElementById('m-psp').value;
+  const dlSlot=document.getElementById('m-dl-slot').value;
+  const datum=document.getElementById('m-datum').value||today();
+  const rgnr=document.getElementById('m-rgnr').value.trim();
+  if(!betrag||!pspId){alert('Betrag und PSP-Element sind Pflicht.');return;}
+  invoices.push({id:'i'+Date.now(),pspId,dienstleister:dlSlot||dl||'–',betrag,typ,datum,rgnr,src:'manuell'});
+  ['m-dl','m-betrag','m-rgnr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m-datum').value=today();
+  saveState();renderAll();
+}
+
+// ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
+function xlsStyle(bold=false,bg=null,numFmt=null){
+  const s={font:{bold},fill:bg?{patternType:'solid',fgColor:{rgb:bg}}:{patternType:'none'},border:{bottom:{style:'thin',color:{rgb:'D6CFC0'}}}};
+  if(numFmt)s.numFmt=numFmt;
+  return s;
+}
+
+function exportBudgetübersicht(){
+  const wb=XLSX.utils.book_new();
+  const rows=[
+    ['PSP-Code','Projekt','Leistung','Dienstleister','Budget Gesamt €','Budget-Anteil DL €','Ist-Kosten €','Verbleibendes Budget €','Ausschöpfung %']
+  ];
+  psps.forEach(p=>{
+    const pUsed=getUsed(p.id);
+    if(p.dienstleister.length===0){
+      rows.push([p.code,p.projekt,p.name,'–',p.budget,null,pUsed,p.budget-pUsed,Math.round(pUsed/p.budget*100)+'%']);
+    } else {
+      p.dienstleister.forEach((d,i)=>{
+        const du=getUsed(p.id,d.name);
+        const df=d.budgetAnteil!=null?d.budgetAnteil-du:null;
+        rows.push([
+          i===0?p.code:'', i===0?p.projekt:'', i===0?p.name:'',
+          d.name,
+          i===0?p.budget:'',
+          d.budgetAnteil!=null?d.budgetAnteil:'',
+          du,
+          df!=null?df:'',
+          d.budgetAnteil?Math.round(du/d.budgetAnteil*100)+'%':''
+        ]);
+      });
+    }
+  });
+  // Summenzeile
+  const totBudget=psps.reduce((s,p)=>s+p.budget,0);
+  const totUsed=psps.reduce((s,p)=>s+getUsed(p.id),0);
+  rows.push([]);
+  rows.push(['GESAMT','','','',totBudget,'',totUsed,totBudget-totUsed,Math.round(totUsed/totBudget*100)+'%']);
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:20},{wch:22},{wch:24},{wch:16},{wch:16},{wch:14},{wch:20},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,'Budgetübersicht');
+  XLSX.writeFile(wb,`PSP_Budgetübersicht_${today()}.xlsx`);
+}
+
+function exportRechnungen(){
+  const wb=XLSX.utils.book_new();
+  const rows=[['Datum','KW','Dienstleister','Rechnungsnummer','PSP-Code','Projekt','Leistung','Typ','Betrag €','Quelle']];
+  const sorted=[...invoices].sort((a,b)=>b.datum.localeCompare(a.datum));
+  sorted.forEach(inv=>{
+    const psp=psps.find(p=>p.id===inv.pspId);
+    const kw=inv.datum?'KW '+kwOf(inv.datum):'–';
+    rows.push([
+      inv.datum||'',kw,inv.dienstleister,inv.rgnr||'',
+      psp?psp.code:'–',psp?psp.projekt:'–',psp?psp.name:'–',
+      typLabel(inv.typ),inv.betrag,inv.src||'–'
+    ]);
+  });
+  // Summe
+  const tot=invoices.reduce((s,i)=>s+i.betrag,0);
+  rows.push([]);
+  rows.push(['','','','','','','','GESAMT',tot,'']);
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:6},{wch:24},{wch:16},{wch:12},{wch:18},{wch:22},{wch:18},{wch:14},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Rechnungen');
+  XLSX.writeFile(wb,`PSP_Rechnungen_${today()}.xlsx`);
+}
+
+function exportWochenbericht(){
+  const now=new Date(),ws_=new Date(now);
+  ws_.setDate(now.getDate()-now.getDay()+1);ws_.setHours(0,0,0,0);
+  const kw=kwOf(today());
+  const tw=invoices.filter(i=>i.datum&&new Date(i.datum)>=ws_);
+  if(!tw.length){alert('Keine Rechnungen in dieser Woche.');return;}
+
+  const wb=XLSX.utils.book_new();
+  const rows=[
+    [`Wochenbericht KW ${kw} – ${now.getFullYear()}`],
+    [`Exportdatum: ${new Date().toLocaleDateString('de-DE')}`],
+    [],
+    ['Datum','Dienstleister','Rechnungsnummer','PSP-Code','Leistung','Typ','Betrag €']
+  ];
+  tw.forEach(inv=>{
+    const psp=psps.find(p=>p.id===inv.pspId);
+    rows.push([inv.datum||'',inv.dienstleister,inv.rgnr||'',psp?psp.code:'–',psp?psp.name:'–',typLabel(inv.typ),inv.betrag]);
+  });
+  const tot=tw.reduce((s,i)=>s+i.betrag,0);
+  rows.push([]);
+  rows.push(['','','','','','GESAMT',tot]);
+
+  // PSP-Status dieser Woche
+  rows.push([],[`PSP-Budgetstatus (Stand KW ${kw})`],[]);
+  rows.push(['PSP-Code','Leistung','Budget €','Verbraucht €','Frei €','%']);
+  psps.forEach(p=>{
+    const used=getUsed(p.id);
+    rows.push([p.code,p.name,p.budget,used,p.budget-used,Math.round(used/p.budget*100)+'%']);
+  });
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:24},{wch:16},{wch:12},{wch:22},{wch:18},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,`KW ${kw}`);
+  XLSX.writeFile(wb,`PSP_Wochenbericht_KW${kw}_${now.getFullYear()}.xlsx`);
+}
+
+function exportKomplett(){
+  const wb=XLSX.utils.book_new();
+
+  // Sheet 1: Budgetübersicht
+  const r1=[['PSP-Code','Projekt','Leistung','Dienstleister','Budget €','Budget-Anteil €','Ist-Kosten €','Frei €','%']];
+  psps.forEach(p=>{
+    p.dienstleister.forEach((d,i)=>{
+      const du=getUsed(p.id,d.name);
+      r1.push([i===0?p.code:'',i===0?p.projekt:'',i===0?p.name:'',d.name,i===0?p.budget:'',d.budgetAnteil!=null?d.budgetAnteil:'',du,d.budgetAnteil!=null?d.budgetAnteil-du:'',d.budgetAnteil?Math.round(du/d.budgetAnteil*100)+'%':'']);
+    });
+  });
+  const tot=psps.reduce((s,p)=>s+p.budget,0),totU=psps.reduce((s,p)=>s+getUsed(p.id),0);
+  r1.push([],[`GESAMT`,'','','',tot,'',totU,tot-totU,Math.round(totU/tot*100)+'%']);
+  const ws1=XLSX.utils.aoa_to_sheet(r1);
+  ws1['!cols']=[{wch:14},{wch:18},{wch:22},{wch:24},{wch:14},{wch:14},{wch:14},{wch:14},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Budgetübersicht');
+
+  // Sheet 2: Alle Rechnungen
+  const r2=[['Datum','KW','Dienstleister','Rechnungsnr.','PSP-Code','Projekt','Leistung','Typ','Betrag €','Quelle']];
+  [...invoices].sort((a,b)=>b.datum.localeCompare(a.datum)).forEach(inv=>{
+    const psp=psps.find(p=>p.id===inv.pspId);
+    r2.push([inv.datum||'','KW '+kwOf(inv.datum),inv.dienstleister,inv.rgnr||'',psp?psp.code:'–',psp?psp.projekt:'–',psp?psp.name:'–',typLabel(inv.typ),inv.betrag,inv.src||'–']);
+  });
+  r2.push([],[``,``,``,``,``,``,``,`GESAMT`,invoices.reduce((s,i)=>s+i.betrag,0),``]);
+  const ws2=XLSX.utils.aoa_to_sheet(r2);
+  ws2['!cols']=[{wch:12},{wch:6},{wch:24},{wch:16},{wch:12},{wch:18},{wch:22},{wch:18},{wch:14},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Rechnungen');
+
+  // Sheet 3: Dienstleister-Übersicht
+  const dlMap={};
+  invoices.forEach(inv=>{
+    if(!dlMap[inv.dienstleister])dlMap[inv.dienstleister]={gesamt:0,count:0,psps:new Set()};
+    dlMap[inv.dienstleister].gesamt+=inv.betrag;
+    dlMap[inv.dienstleister].count++;
+    const psp=psps.find(p=>p.id===inv.pspId);
+    if(psp)dlMap[inv.dienstleister].psps.add(psp.code);
+  });
+  const r3=[['Dienstleister','Anzahl Rechnungen','Gesamtbetrag €','Zugeordnete PSP-Elemente']];
+  Object.entries(dlMap).sort((a,b)=>b[1].gesamt-a[1].gesamt).forEach(([name,d])=>{
+    r3.push([name,d.count,d.gesamt,[...d.psps].join(', ')]);
+  });
+  const ws3=XLSX.utils.aoa_to_sheet(r3);
+  ws3['!cols']=[{wch:28},{wch:20},{wch:18},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,ws3,'Dienstleister');
+
+  XLSX.writeFile(wb,`PSP_KompletExport_${today()}.xlsx`);
+}
+
+// ─── PSP CRUD ────────────────────────────────────────────────────────────────
+function openPSPModal(editId=null){
+  const ep=editId?psps.find(p=>p.id===editId):null;
+  dlEntries=ep?JSON.parse(JSON.stringify(ep.dienstleister)):[{name:'',budgetAnteil:null}];
+  document.getElementById('p-code').value=ep?ep.code:'';
+  document.getElementById('p-proj').value=ep?ep.projekt:'';
+  document.getElementById('p-name').value=ep?ep.name:'';
+  document.getElementById('p-budget').value=ep?ep.budget:'';
+  document.getElementById('psp-modal').dataset.editId=editId||'';
+  document.getElementById('psp-modal-title').textContent=editId?'PSP-Element bearbeiten':'PSP-Element anlegen';
+  renderDLEntries();
+  document.getElementById('psp-modal').classList.add('open');
+}
+function editPSP(id){openPSPModal(id);}
+function renderDLEntries(){
+  document.getElementById('dl-entries').innerHTML=dlEntries.map((d,i)=>`
+    <div class="dl-entry">
+      <div class="fgroup"><label>Firmenname</label><input type="text" value="${d.name}" oninput="dlEntries[${i}].name=this.value" placeholder="Firma GmbH"/></div>
+      <div class="fgroup"><label>Budget-Anteil (€)</label><input type="number" value="${d.budgetAnteil||''}" oninput="dlEntries[${i}].budgetAnteil=this.value?parseFloat(this.value):null" placeholder="optional"/></div>
+      ${dlEntries.length>1?`<button class="dl-remove" onclick="removeDLEntry(${i})">✕</button>`:'<div></div>'}
+    </div>`).join('');
+}
+function addDLEntry(){dlEntries.push({name:'',budgetAnteil:null});renderDLEntries();}
+function removeDLEntry(i){dlEntries.splice(i,1);renderDLEntries();}
+function savePSP(){
+  const code=document.getElementById('p-code').value.trim();
+  const proj=document.getElementById('p-proj').value.trim();
+  const name=document.getElementById('p-name').value.trim();
+  const budget=parseFloat(document.getElementById('p-budget').value);
+  if(!name||!budget){alert('Bezeichnung und Budget sind Pflicht.');return;}
+  const dls=dlEntries.filter(d=>d.name.trim());
+  const editId=document.getElementById('psp-modal').dataset.editId;
+  if(editId){const idx=psps.findIndex(p=>p.id===editId);if(idx>-1)psps[idx]={...psps[idx],code:code||'PSP',projekt:proj,name,budget,dienstleister:dls};}
+  else psps.push({id:'psp'+Date.now(),code:code||'PSP',projekt:proj,name,budget,dienstleister:dls});
+  closeOverlay('psp-modal');saveState();renderAll();
+}
+function deletePSP(id){if(!confirm('PSP-Element löschen?'))return;psps=psps.filter(p=>p.id!==id);saveState();renderAll();}
+function deleteInvoice(id){if(!confirm('Rechnung löschen?'))return;invoices=invoices.filter(i=>i.id!==id);saveState();renderAll();}
+function confirmReset(){
+  if(!confirm('Alle Daten löschen und Beispieldaten wiederherstellen?'))return;
+  localStorage.removeItem(SK_PSPS);localStorage.removeItem(SK_INV);location.reload();
+}
+
+// ─── OBLIGO ───────────────────────────────────────────────────────────────────
+function handleObligoUpload(e){const f=e.target.files[0];if(f)readObligoCSV(f);}
+function readObligoCSV(file){const r=new FileReader();r.onload=ev=>parseObligo(ev.target.result);r.readAsText(file,'UTF-8');}
+
+function parseObligo(text) {
+  // Strip BOM, split lines
+  const lines = text.replace(/^\uFEFF/,'').trim().split('\n').filter(l=>l.trim());
+  const rows = [];
+  let currentType = null; // 'BANF' or 'BEST'
+
+  for (const line of lines) {
+    // Clean quotes
+    const cols = line.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+    if (cols.length < 7) continue;
+
+    const [jahr, kostenart, objekt, refNr, bezeichnung, datum, wertRaw] = cols;
+    const wert = parseFloat(wertRaw?.replace(',','.')) || 0;
+
+    // Detect type-summary lines
+    if (jahr.includes('BANF')) { currentType = 'BANF'; continue; }
+    if (jahr.includes('BEST')) { currentType = 'BEST'; continue; }
+
+    // Skip pure total lines (no objekt/refNr)
+    if (!objekt && !refNr) continue;
+
+    // Skip lines that are subtotals (no Geschäftsjahr number)
+    if (isNaN(parseInt(jahr)) || !refNr) continue;
+
+    // Determine type from refNr: BEST numbers start with 45
+    const isBEST = refNr.startsWith('45') && refNr.length >= 10;
+    const typ = isBEST ? 'BEST' : 'BANF';
+
+    // Match to PSP
+    const psp = psps.find(p =>
+      p.code === objekt ||
+      objekt.includes(p.code) ||
+      p.code.includes(objekt)
+    );
+
+    rows.push({
+      id: 'obl_' + Date.now() + '_' + Math.random(),
+      typ,
+      objekt: objekt || '–',
+      refNr,
+      bezeichnung,
+      datum,
+      wert,
+      pspId: psp ? psp.id : null,
+      pspCode: objekt,
+      importedAt: today()
+    });
+  }
+
+  obligoPending = rows;
+
+  const banfCount = rows.filter(r=>r.typ==='BANF').length;
+  const bestCount = rows.filter(r=>r.typ==='BEST').length;
+  const noticeEl = document.getElementById('obligo-notice');
+
+  if (!rows.length) {
+    noticeEl.innerHTML=`<div class="notice notice-err">Keine gültigen Zeilen erkannt. Bitte Format prüfen.</div>`;
+    return;
+  }
+
+  noticeEl.innerHTML=`<div class="notice notice-ok">
+    ${banfCount} BANF · ${bestCount} Bestellung${bestCount!==1?'en':''} erkannt
+    ${rows.filter(r=>!r.pspId).length ? `· <span style="color:var(--warn)">${rows.filter(r=>!r.pspId).length} PSP nicht zugeordnet</span>` : ' · alle PSP zugeordnet ✓'}
+  </div>`;
+
+  // Preview table
+  const prevEl = document.getElementById('obligo-preview');
+  prevEl.style.display = 'block';
+  prevEl.innerHTML = `
+    <div style="font-size:10px;font-family:var(--mono);color:var(--muted);margin:8px 0 6px;text-transform:uppercase;letter-spacing:1px">Vorschau (${rows.length} Zeilen)</div>
+    <div class="csv-rows">
+      <div class="csv-row hdr"><span>Typ / PSP</span><span>Bestellnr.</span><span>Bezeichnung</span><span>Betrag</span></div>
+      ${rows.map(r=>`<div class="csv-row ${r.pspId?'ok':'warn'}">
+        <span><span class="badge ${r.typ==='BEST'?'badge-best':'badge-banf'}">${r.typ}</span> <span style="font-size:10px;color:var(--muted)">${r.objekt}</span></span>
+        <span style="font-family:var(--mono);font-size:10px">${r.typ==='BEST'?r.refNr:'–'}</span>
+        <span style="font-size:11px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.bezeichnung}</span>
+        <span style="font-family:var(--mono);font-size:11px">${fmt(r.wert)}</span>
+      </div>`).join('')}
+    </div>`;
+
+  document.getElementById('obligo-import-btn').style.display = 'block';
+}
+
+function importObligoRows() {
+  // Replace all obligo data (weekly refresh = full replace)
+  obligoRows = obligoPending;
+  obligoPending = [];
+  saveState();
+  renderAll();
+  document.getElementById('obligo-notice').innerHTML=`<div class="notice notice-ok">✓ Obligo aktualisiert – ${obligoRows.length} Positionen geladen.</div>`;
+  document.getElementById('obligo-preview').style.display='none';
+  document.getElementById('obligo-import-btn').style.display='none';
+  // Show obligo card and scroll to it
+  document.getElementById('obligo-card').style.display='block';
+}
+
+function renderObligo() {
+  const card = document.getElementById('obligo-card');
+  const tbody = document.getElementById('obligo-tbody');
+  if (!obligoRows.length) { card.style.display='none'; return; }
+  card.style.display='block';
+
+  const banfTotal = obligoRows.filter(r=>r.typ==='BANF').reduce((s,r)=>s+r.wert,0);
+  const bestTotal = obligoRows.filter(r=>r.typ==='BEST').reduce((s,r)=>s+r.wert,0);
+  document.getElementById('obligo-banf-sum').textContent = fmt(banfTotal);
+  document.getElementById('obligo-best-sum').textContent = fmt(bestTotal);
+  document.getElementById('obligo-total-sum').textContent = fmt(banfTotal+bestTotal);
+
+  // Date badge from latest import
+  if (obligoRows[0]?.importedAt) {
+    document.getElementById('obligo-date-badge').textContent =
+      'Stand: ' + new Date(obligoRows[0].importedAt).toLocaleDateString('de-DE');
+  }
+
+  const sorted = [...obligoRows].sort((a,b)=>{
+    if (a.typ!==b.typ) return a.typ==='BANF'?-1:1;
+    return a.pspCode.localeCompare(b.pspCode);
+  });
+
+  tbody.innerHTML = sorted.map(r => {
+    const psp = psps.find(p=>p.id===r.pspId);
+    const d = r.datum ? new Date(r.datum).toLocaleDateString('de-DE') : '–';
+    return `<tr>
+      <td>
+        <div class="inv-name">${r.pspCode}</div>
+        <div class="inv-sub">${psp?psp.name:'PSP nicht zugeordnet'}</div>
+      </td>
+      <td><span class="badge ${r.typ==='BEST'?'badge-best':'badge-banf'}">${r.typ}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${r.typ==='BEST'?`<strong>${r.refNr}</strong>`:'–'}</td>
+      <td style="font-size:12px;color:var(--ink2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.bezeichnung}</td>
+      <td class="inv-date">${d}</td>
+      <td class="inv-amount">${fmt(r.wert)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── OVERLAY ─────────────────────────────────────────────────────────────────
+function closeOverlay(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+
+// DRAG & DROP
+['pdf','csv','obligo'].forEach(type=>{
+  const dz=document.getElementById('drop-zone-'+type);
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+  dz.addEventListener('drop',e=>{
+    e.preventDefault();dz.classList.remove('drag-over');
+    const f=e.dataTransfer.files[0];if(!f)return;
+    if(type==='pdf')processFile(f);
+    else if(type==='csv')readCSV(f);
+    else readObligoCSV(f);
+  });
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+loadState();
+document.getElementById('m-datum').value=today();
+renderAll();
+</script>
+</body>
+</html>
